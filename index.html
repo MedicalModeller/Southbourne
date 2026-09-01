@@ -535,10 +535,13 @@ function renderTideChart(series, isRealSeries){
   const linePts = dataPts.map(p => `${xFor(p.time)},${yFor(p.height)}`).join(' ');
   svgContent += `<polygon class="tide-fill" points="${axisW},${h} ${linePts} ${w},${h}"/>`;
   svgContent += `<polyline class="tide-curve" points="${linePts}"/>`;
-  // small dot at each data point (matches EasyTide's own style)
-  dataPts.forEach(p => {
-    svgContent += `<circle cx="${xFor(p.time)}" cy="${yFor(p.height)}" r="2.2" class="tide-point"/>`;
-  });
+  // small dot at each data point (matches EasyTide's own style) — only for genuine
+  // data points, not the densely-sampled interpolated fallback curve
+  if(isRealSeries){
+    dataPts.forEach(p => {
+      svgContent += `<circle cx="${xFor(p.time)}" cy="${yFor(p.height)}" r="2.2" class="tide-point"/>`;
+    });
+  }
   // "now" marker, drawn on top
   const nowV = interpolateTideHeight(series, now);
   if(nowV !== null){
@@ -553,27 +556,25 @@ function renderTideChart(series, isRealSeries){
 
 async function updateTfl(){
   const box = document.getElementById('tfl');
+  const UKHO_API_KEY = '50f2b207e6914f4fbde71277b28e2af6'; // free Discovery tier — Bournemouth station 0037
   try{
-    const res = await fetch('https://easytide.admiralty.co.uk/Home/GetPredictionData?stationID=0037&duration=2');
+    const res = await fetch('https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6', {
+      headers: { 'Ocp-Apim-Subscription-Key': UKHO_API_KEY }
+    });
     if(!res.ok) throw new Error('Tide fetch failed: ' + res.status);
     const data = await res.json();
-    const events = (data.tidalEventList || data.TidalEventList || [])
+    const events = (Array.isArray(data) ? data : [])
       .map(e => ({
-        time: new Date(e.dateTime || e.DateTime),
-        type: (e.eventType || e.EventType || '').toString().toLowerCase(),
-        height: e.height ?? e.Height
+        time: new Date(e.DateTime || e.dateTime),
+        type: (e.EventType || e.eventType || '').toString().toLowerCase(),
+        height: e.Height ?? e.height
       }))
+      .filter(e => !isNaN(e.time) && typeof e.height === 'number')
       .sort((a,b) => a.time - b.time);
 
-    // real half-hourly predicted heights, when the station provides them (most do)
-    const heightSeries = (data.tidalHeightOccurenceList || data.TidalHeightOccurenceList ||
-                           data.tidalHeightOccurrenceList || data.TidalHeightOccurrenceList || [])
-      .map(o => ({
-        time: new Date(o.dateTime || o.DateTime),
-        height: o.height ?? o.Height
-      }))
-      .filter(o => typeof o.height === 'number')
-      .sort((a,b) => a.time - b.time);
+    // Discovery tier only provides high/low events, not a continuous height series —
+    // this stays empty so the chart falls back to smooth interpolation between events
+    const heightSeries = [];
 
     const now = new Date();
     const next = events.find(e => e.time > now);
