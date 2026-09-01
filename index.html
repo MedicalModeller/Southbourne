@@ -122,25 +122,6 @@
   .stat-col{ display:flex; flex-direction:column; gap:1.8vh; margin-top:2vh; width:72vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:2vh 2.5vw; position:relative; z-index:2; }
   body.night .stat-col{ background:rgba(0,0,0,0.28); }
 
-  .tide-panel{ margin-top:2vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:2vh 2.5vw; position:relative; z-index:2; display:none; }
-  body.night .tide-panel{ background:rgba(0,0,0,0.28); }
-  .tide-panel.show{ display:block; }
-  .tide-panel-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1vh; }
-  .tide-panel-title{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; }
-  .tide-panel-value{ font-family:'Outfit', sans-serif; font-size:2.6vh; font-weight:600; color:var(--ink); }
-  body.night .tide-panel-value{ color:#eef3f6; }
-  #tide-svg{ width:100%; height:16vh; display:block; }
-  .tide-curve{ fill:none; stroke:var(--accent); stroke-width:2.5; }
-  body.night .tide-curve{ stroke:#6fb4e6; }
-  .tide-fill{ fill:var(--accent); opacity:0.12; }
-  .tide-now-dot{ fill:var(--accent); }
-  body.night .tide-now-dot{ fill:#6fb4e6; }
-  .tide-point{ fill:var(--accent); opacity:0.6; }
-  body.night .tide-point{ fill:#6fb4e6; }
-  .tide-now-line{ stroke:var(--ink-faint); stroke-width:1; stroke-dasharray:3,3; }
-  .tide-label{ font-family:'JetBrains Mono', monospace; font-size:13px; fill:var(--ink-faint); }
-  .grid-line{ stroke:var(--line); stroke-width:1; }
-  body.night .grid-line{ stroke:rgba(255,255,255,0.14); }
   .stat{ display:flex; align-items:center; justify-content:space-between; gap:1vw; font-size:6vh; color:var(--ink-soft); font-weight:500; white-space:nowrap; padding-bottom:1.8vh; border-bottom:1px solid var(--line); }
   .stat .stat-label{ display:flex; align-items:center; gap:0.8vw; }
   .stat:last-child{ border-bottom:none; padding-bottom:0; }
@@ -149,12 +130,9 @@
   body.night .stat{ border-bottom-color:rgba(255,255,255,0.14); }
 
   #tfl{
-    display:flex;
-    align-items:center;
-    gap:1vw;
     background:rgba(255,255,255,0.55);
     border-radius:10px;
-    padding:1.6vh 2vw;
+    padding:1.8vh 2.5vw;
     width:fit-content;
     opacity:0;
     visibility:hidden;
@@ -164,9 +142,13 @@
   }
   body.night #tfl{ background:rgba(0,0,0,0.28); }
   #tfl.show{ opacity:1; visibility:visible; }
-  #tfl .dot{ width:2.2vh; height:2.2vh; border-radius:50%; background:var(--accent); flex:none; }
-  #tfl-text{ font-size:3vh; font-weight:500; color:var(--ink-soft); }
-  body.night #tfl-text{ color:#eef3f6; }
+  .tide-title{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; margin-bottom:1.2vh; }
+  #tide-row{ display:flex; gap:2.5vw; }
+  .tide-col{ display:flex; flex-direction:column; align-items:center; gap:0.4vh; }
+  .tide-col .tc-type{ font-size:2vh; color:var(--ink-soft); font-weight:500; white-space:nowrap; }
+  .tide-col .tc-time{ font-family:'Outfit', sans-serif; font-size:3vh; font-weight:600; color:var(--ink); }
+  body.night .tide-col .tc-time{ color:#eef3f6; }
+  .tide-col .tc-height{ font-family:'JetBrains Mono', monospace; font-size:2vh; color:var(--ink-faint); }
 
   .footer{ font-family:'JetBrains Mono', monospace; font-size:1.9vh; letter-spacing:1px; color:var(--ink-faint); text-align:center; margin-top:1vh; z-index:1; position:relative; }
 
@@ -214,17 +196,9 @@
       </div>
 
       <div id="tfl">
-        <span class="dot"></span>
-        <span id="tfl-text">Tide: —</span>
+        <div class="tide-title">Tide times &middot; Today</div>
+        <div id="tide-row"></div>
       </div>
-    </div>
-
-    <div class="tide-panel" id="tide-panel">
-      <div class="tide-panel-head">
-        <span class="tide-panel-title">Tide</span>
-        <span class="tide-panel-value" id="tide-panel-value">—</span>
-      </div>
-      <svg id="tide-svg" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
     </div>
 
     <div class="footer">154 Southbourne Overcliff Drive &middot; updates every 10 min</div>
@@ -470,95 +444,13 @@ async function updateWeather(){
   }
 }
 
-/* ---------- DATA FETCH: TFL PICCADILLY LINE ---------- */
-/* ---------- TIDE STATUS (UKHO EasyTide, unofficial free endpoint — Bournemouth station 0037) ---------- */
-function interpolateTideHeight(events, t){
-  // cosine interpolation between the two bracketing high/low events — gives the
-  // characteristic S-shaped tidal curve while passing exactly through each point
-  let before = null, after = null;
-  for(let i=0;i<events.length-1;i++){
-    if(events[i].time <= t && events[i+1].time >= t){ before = events[i]; after = events[i+1]; break; }
-  }
-  if(!before || !after) return null;
-  const frac = (t - before.time) / (after.time - before.time);
-  return before.height + (after.height - before.height) * (1 - Math.cos(Math.PI * frac)) / 2;
-}
-
-function renderTideChart(series, isRealSeries){
-  const panel = document.getElementById('tide-panel');
-  const svg = document.getElementById('tide-svg');
-  if(!series || series.length < 2){ panel.classList.remove('show'); return; }
-
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - 6*3600*1000);
-  const windowEnd = new Date(now.getTime() + 18*3600*1000);
-
-  const heights = series.map(e => e.height).filter(h => typeof h === 'number');
-  if(heights.length < 2){ panel.classList.remove('show'); return; }
-  const lo = Math.max(0, Math.min(...heights) - 0.3), hi = Math.max(...heights) + 0.3;
-
-  const w = 600, h = 100, labelY = 122, axisW = 28;
-  const xFor = t => axisW + ((t - windowStart) / (windowEnd - windowStart)) * (w - axisW);
-  const yFor = v => h - ((v - lo)/(hi - lo)) * h;
-
-  // build the plotted points: use the real half-hourly series directly if we have it,
-  // otherwise fall back to sampling the smooth cosine interpolation every 15 minutes
-  let dataPts = [];
-  if(isRealSeries){
-    dataPts = series.filter(p => p.time >= windowStart && p.time <= windowEnd);
-  } else {
-    for(let m = 0; m <= 24*60; m += 15){
-      const t = new Date(windowStart.getTime() + m*60000);
-      const v = interpolateTideHeight(series, t);
-      if(v !== null) dataPts.push({ time: t, height: v });
-    }
-  }
-  if(dataPts.length < 2){ panel.classList.remove('show'); return; }
-
-  let svgContent = '';
-  // y-axis gridlines + height labels (0 up to the rounded ceiling, in whole metres)
-  const topMetre = Math.ceil(hi);
-  for(let m = 0; m <= topMetre; m++){
-    const y = yFor(m);
-    if(y < -2 || y > h+2) continue;
-    svgContent += `<line x1="${axisW}" y1="${y}" x2="${w}" y2="${y}" class="grid-line"/>`;
-    svgContent += `<text x="${axisW-6}" y="${y+4}" font-size="12" font-family="'JetBrains Mono', monospace" class="tide-label" text-anchor="end">${m}</text>`;
-  }
-  // hour labels every 3 hours across the window
-  for(let m = -6*60; m <= 18*60; m += 180){
-    const t = new Date(now.getTime() + m*60000);
-    const x = xFor(t);
-    const label = t.getHours().toString().padStart(2,'0')+':00';
-    svgContent += `<text x="${x}" y="${labelY}" font-size="12" font-family="'JetBrains Mono', monospace" class="tide-label" text-anchor="middle">${label}</text>`;
-  }
-  // filled area + curve
-  const linePts = dataPts.map(p => `${xFor(p.time)},${yFor(p.height)}`).join(' ');
-  svgContent += `<polygon class="tide-fill" points="${axisW},${h} ${linePts} ${w},${h}"/>`;
-  svgContent += `<polyline class="tide-curve" points="${linePts}"/>`;
-  // small dot at each data point (matches EasyTide's own style) — only for genuine
-  // data points, not the densely-sampled interpolated fallback curve
-  if(isRealSeries){
-    dataPts.forEach(p => {
-      svgContent += `<circle cx="${xFor(p.time)}" cy="${yFor(p.height)}" r="2.2" class="tide-point"/>`;
-    });
-  }
-  // "now" marker, drawn on top
-  const nowV = interpolateTideHeight(series, now);
-  if(nowV !== null){
-    const nowX = xFor(now), nowY = yFor(nowV);
-    svgContent += `<line x1="${nowX}" y1="0" x2="${nowX}" y2="${h}" class="tide-now-line"/>`;
-    svgContent += `<circle cx="${nowX}" cy="${nowY}" r="5" class="tide-now-dot"/>`;
-  }
-
-  svg.innerHTML = svgContent;
-  panel.classList.add('show');
-}
-
+/* ---------- TIDE STATUS (UKHO Tidal API, via CORS relay) ---------- */
 async function updateTfl(){
   const box = document.getElementById('tfl');
   const UKHO_API_KEY = '50f2b207e6914f4fbde71277b28e2af6'; // free Discovery tier — Bournemouth station 0037
   try{
-    const res = await fetch('https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6&subscription-key=' + UKHO_API_KEY);
+    const target = 'https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6&subscription-key=' + UKHO_API_KEY;
+    const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(target));
     if(!res.ok) throw new Error('Tide fetch failed: ' + res.status);
     const data = await res.json();
     const events = (Array.isArray(data) ? data : [])
@@ -570,35 +462,31 @@ async function updateTfl(){
       .filter(e => !isNaN(e.time) && typeof e.height === 'number')
       .sort((a,b) => a.time - b.time);
 
-    // Discovery tier only provides high/low events, not a continuous height series —
-    // this stays empty so the chart falls back to smooth interpolation between events
-    const heightSeries = [];
-
     const now = new Date();
-    const next = events.find(e => e.time > now);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24*3600*1000);
+    const todaysEvents = events.filter(e => e.time >= todayStart && e.time < todayEnd);
 
-    if(next){
-      const isHighNext = next.type.includes('high');
-      const direction = isHighNext ? 'Rising' : 'Falling';
-      const hh = next.time.getHours().toString().padStart(2,'0');
-      const mm = next.time.getMinutes().toString().padStart(2,'0');
-      const label = isHighNext ? 'High' : 'Low';
-      document.getElementById('tfl-text').textContent = `Tide: ${direction} \u2014 ${label} at ${hh}:${mm}`;
+    const row = document.getElementById('tide-row');
+    if(todaysEvents.length > 0){
+      row.innerHTML = todaysEvents.map(e => {
+        const isHigh = e.type.includes('high');
+        const hh = e.time.getHours().toString().padStart(2,'0');
+        const mm = e.time.getMinutes().toString().padStart(2,'0');
+        const heightStr = typeof e.height === 'number' ? `${e.height.toFixed(1)}m` : '';
+        return `<div class="tide-col">
+          <span class="tc-type">${isHigh ? 'High Water' : 'Low Water'}</span>
+          <span class="tc-time">${hh}:${mm}</span>
+          <span class="tc-height">${heightStr}</span>
+        </div>`;
+      }).join('');
       box.classList.add('show');
     } else {
       box.classList.remove('show');
     }
-
-    const curveSource = heightSeries.length >= 4 ? heightSeries : events;
-    const curHeight = interpolateTideHeight(curveSource, now);
-    if(curHeight !== null){
-      document.getElementById('tide-panel-value').textContent = `${curHeight.toFixed(1)}m now`;
-    }
-    renderTideChart(curveSource, heightSeries.length >= 4);
   } catch(err){
     console.error('Tide fetch failed', err);
     box.classList.remove('show');
-    document.getElementById('tide-panel').classList.remove('show');
   }
 }
 
