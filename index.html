@@ -1,1 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Southbourne Weather</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky-day-top:#cfe4ee;
+    --sky-day-bot:#eaf2f5;
+    --sky-night-top:#0d1b2a;
+    --sky-night-bot:#182a3c;
+    --ink:#16232e;
+    --ink-soft:#4a5b68;
+    --ink-faint:#8a99a3;
+    --paper:#f4f7f8;
+    --line:#c7d3d8;
+    --accent:#2f6fa8;
+    --amber:#c98a2b;
+    --alert:#b5482b;
+    --sun:#e9b64f;
+    --cloud:#ffffff;
+    --cloud-op:0.55;
+    --clock-color:#1e6fd9;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%;
+    background:var(--sky-day-bot);
+    font-family:'Space Grotesk', sans-serif;
+    color:var(--ink);
+    overflow:hidden;
+  }
+  body{
+    display:flex;
+    align-items:stretch;
+    justify-content:stretch;
+  }
+  #stage{
+    position:relative;
+    width:100%;
+    height:100vh;
+    background:linear-gradient(var(--sky-day-top), var(--sky-day-bot));
+    transition:background 1.2s ease;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:4vh 4vw;
+    overflow:hidden;
+    border:2px solid rgba(22,35,46,0.14);
+    outline:1.4vh solid var(--sky-day-bot);
+    outline-offset:-1.4vh;
+  }
+  body.night #stage{ outline-color:var(--sky-night-bot); border-color:rgba(255,255,255,0.14); }
+  .rivet{
+    position:absolute; width:0.9vh; height:0.9vh; border-radius:50%;
+    background:rgba(22,35,46,0.18); z-index:2;
+  }
+  body.night .rivet{ background:rgba(255,255,255,0.22); }
+  .rivet.tl{ top:1.6vh; left:1.6vh; } .rivet.tr{ top:1.6vh; right:1.6vh; }
+  .rivet.bl{ bottom:1.6vh; left:1.6vh; } .rivet.br{ bottom:1.6vh; right:1.6vh; }
+  body.night #stage{ background:linear-gradient(var(--sky-night-top), var(--sky-night-bot)); }
+  body.night{ color:#eef3f6; }
+  body.night .ink-soft{ color:#a9bac6 !important; }
+  body.night .stroke{ stroke:rgba(255,255,255,0.5) !important; }
+  body.night{ --clock-color:#5fa8ff; }
 
+  #scene{ position:absolute; inset:0; z-index:0; }
+  @keyframes driftSlow{ from{ transform:translateX(-15px); } to{ transform:translateX(15px); } }
+  @keyframes driftMed{ from{ transform:translateX(-25px); } to{ transform:translateX(20px); } }
+  @keyframes driftFast{ from{ transform:translateX(-35px); } to{ transform:translateX(30px); } }
+  .drift-slow{ animation:driftSlow 40s ease-in-out infinite alternate; }
+  .drift-med{ animation:driftMed 28s ease-in-out infinite alternate; }
+  .drift-fast{ animation:driftFast 18s ease-in-out infinite alternate; }
+  @keyframes twinkle{ 0%,100%{ opacity:0.25; } 50%{ opacity:0.9; } }
+  .star-twinkle{ animation:twinkle 3.5s ease-in-out infinite; }
+  .star-twinkle-slow{ animation:twinkle 6s ease-in-out infinite; }
+  @keyframes sunPulse{ 0%,100%{ opacity:0.95; } 50%{ opacity:0.8; } }
+  .sun-pulse{ animation:sunPulse 6s ease-in-out infinite; transform-origin:830px 460px; }
+  @keyframes rayRotate{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  .sun-ray{ transform-origin:830px 460px; }
+  @keyframes rainFall{ 0%{ opacity:0; } 15%{ opacity:0.5; } 100%{ opacity:0; transform:translateY(20px); } }
+  .rain-drop{ animation:rainFall 0.7s linear infinite; }
+  @keyframes snowFall{ 0%{ transform:translateY(0) translateX(0); } 50%{ transform:translateY(20px) translateX(8px); } 100%{ transform:translateY(40px) translateX(0); } }
+  .snow-drift{ animation:snowFall 6s ease-in-out infinite; }
+  @keyframes boltFlash{ 0%,88%,100%{ opacity:0.15; } 90%,94%{ opacity:1; } }
+  .bolt-flash{ animation:boltFlash 4s ease-in-out infinite; }
+
+  .row{ position:relative; z-index:1; display:flex; }
+  .top-row{ justify-content:space-between; align-items:flex-start; }
+  .headline-row{ align-items:flex-end; gap:5vw; margin-top:2vh; }
+
+  .clockbox{ text-align:right; position:absolute; top:6vh; right:0; white-space:nowrap; z-index:1; display:flex; flex-direction:column; gap:0.5vh; }
+  .clock-time{ font-size:15vh; font-weight:600; line-height:0.85; color:var(--clock-color); letter-spacing:-1px; font-family:'Outfit', sans-serif; }
+  .clock-date{ font-size:10vh; font-weight:500; line-height:0.9; color:var(--clock-color); letter-spacing:-1px; }
+
+  .eyebrow{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; letter-spacing:3px; text-transform:uppercase; color:var(--ink-faint); margin-bottom:1vh; display:flex; align-items:center; gap:0.8vw; }
+  .eyebrow .dash{ width:2.2vw; height:1px; background:var(--ink-faint); display:inline-block; }
+  .temp-block{ position:relative; z-index:2; background:rgba(255,255,255,0.55); border-radius:10px; padding:1.8vh 2.5vw; width:fit-content; }
+  body.night .temp-block{ background:rgba(10,20,30,0.85); }
+  .temp-block .label{ font-size:2.6vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; margin-bottom:0.5vh; }
+  .temp-value{ font-size:22vh; font-weight:600; line-height:0.85; position:relative; display:inline-block; letter-spacing:-1px; font-family:'Outfit', sans-serif; }
+  .temp-value sup{ font-size:0.32em; font-weight:400; color:var(--ink-soft); vertical-align:super; }
+  .high{ font-size:5vh; color:var(--ink-soft); font-weight:500; font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .high b{ color:var(--ink); font-weight:600; font-family:'Outfit', sans-serif; }
+  .high sup{ font-size:0.5em; font-weight:400; color:var(--ink-soft); }
+  body.night .high b{ color:#eef3f6; }
+
+  .outlook-row{ display:flex; gap:1.8vw; margin-top:1.5vh; }
+  .outlook-item{ display:flex; flex-direction:column; align-items:center; gap:0.5vh; }
+  .outlook-item .oi-hour{ font-family:'JetBrains Mono', monospace; font-size:2.4vh; color:var(--ink-faint); }
+  .outlook-item .oi-temp{ font-family:'Outfit', sans-serif; font-size:3vh; font-weight:600; color:var(--ink); }
+  body.night .outlook-item .oi-temp{ color:#eef3f6; }
+  .outlook-item svg{ width:6.5vh; height:6.5vh; display:block; }
+
+  .stat-col{ display:flex; flex-direction:column; gap:1.8vh; margin-top:2vh; width:72vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:2vh 2.5vw; position:relative; z-index:2; }
+  body.night .stat-col{ background:rgba(0,0,0,0.28); }
+  .stat{ display:flex; align-items:center; justify-content:space-between; gap:1vw; font-size:6vh; color:var(--ink-soft); font-weight:500; white-space:nowrap; padding-bottom:1.8vh; border-bottom:1px solid var(--line); }
+  .stat .stat-label{ display:flex; align-items:center; gap:0.8vw; }
+  .stat:last-child{ border-bottom:none; padding-bottom:0; }
+  .stat b{ color:var(--ink); font-weight:600; font-family:'Outfit', sans-serif; text-align:right; }
+  body.night .stat b{ color:#eef3f6; }
+  body.night .stat{ border-bottom-color:rgba(255,255,255,0.14); }
+
+  #tfl{
+    display:flex;
+    align-items:center;
+    gap:1vw;
+    background:rgba(197,110,43,0.14);
+    border:1px solid var(--alert);
+    border-radius:8px;
+    padding:1.6vh 2vw;
+    width:fit-content;
+    opacity:0;
+    visibility:hidden;
+    transition:opacity 0.4s ease;
+    position:relative;
+    z-index:2;
+  }
+  #tfl.show{ opacity:1; visibility:visible; }
+  #tfl .dot{ width:2.2vh; height:2.2vh; border-radius:50%; background:var(--alert); flex:none; }
+  #tfl-text{ font-size:3vh; font-weight:500; color:var(--alert); }
+
+  .footer{ font-family:'JetBrains Mono', monospace; font-size:1.9vh; letter-spacing:1px; color:var(--ink-faint); text-align:center; margin-top:1vh; z-index:1; position:relative; }
+
+  #offscreen{
+    position:fixed; inset:0; background:#000; z-index:50;
+    display:none;
+  }
+  #offscreen.show{ display:block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+  <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="none"></svg>
+
+  <div class="row top-row">
+    <div class="temp-block">
+      <div class="eyebrow"><span class="dash"></span>Southbourne, Bournemouth &middot; 50.72&deg;N 1.80&deg;W</div>
+      <div class="headline-row" style="margin-top:0; display:flex; flex-direction:column; align-items:flex-start; gap:0.5vh;">
+        <span class="temp-value" id="temp-val">--<sup>&deg;C</sup></span>
+        <span class="high" id="temp-high">Max temp <b>--<sup>&deg;C</sup></b></span>
+        <div class="outlook-row" id="outlook-row"></div>
+      </div>
+    </div>
+    <div class="clockbox">
+      <div class="clock-time" id="clock-time">--:--</div>
+      <div class="clock-date" id="clock-date">-</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div class="stat-col">
+        <div class="stat"><span class="stat-label">&#9730; Rain next hour</span> <b id="rain-val">--%</b></div>
+        <div class="stat"><span class="stat-label">&#128167; Humidity</span> <b id="humidity-val">--%</b></div>
+        <div class="stat">
+          <span class="stat-label">
+            <svg id="wind-arrow" width="1em" height="1em" viewBox="0 0 24 24" style="transform:rotate(0deg); transition:transform 0.6s ease; flex:none; align-self:center; transform-origin:center;">
+              <path d="M12 2 L18.5 16 L12 12 L5.5 16 Z" fill="currentColor"/>
+            </svg>
+            Wind
+          </span>
+          <b id="wind-val">-- kt (F-)</b>
+        </div>
+      </div>
+
+      <div id="tfl">
+        <span class="dot"></span>
+        <span id="tfl-text">Route to Enfield: —</span>
+      </div>
+    </div>
+
+    <div class="footer">154 Southbourne Overcliff Drive &middot; updates every 10 min</div>
+  </div>
+</div>
+
+<div id="offscreen"></div>
+
+<script>
+/* ---------- CONFIG ---------- */
+const LAT = 50.7206, LON = -1.7990; // Southbourne, Bournemouth (BH6 3NH)
+const ON_HOUR = 7, OFF_HOUR = 23; // display active 07:00–22:59
+const REFRESH_MS = 10 * 60 * 1000; // 10 minutes
+
+/* ---------- SCREEN ON/OFF WINDOW ---------- */
+function applyScreenWindow(){
+  const h = new Date().getHours();
+  // Active 07:00–23:59, off 00:00–06:59 (OFF_HOUR = 0 means "off resumes at midnight")
+  const isOn = OFF_HOUR === 0 ? (h >= ON_HOUR) : (h >= ON_HOUR && h < OFF_HOUR);
+  document.getElementById('offscreen').classList.toggle('show', !isOn);
+}
+setInterval(applyScreenWindow, 30 * 1000);
+applyScreenWindow();
+
+/* ---------- CLOCK / DATE (both shown together) ---------- */
+const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function ordinal(n){
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+function renderClock(){
+  const now = new Date();
+  let hh = now.getHours().toString().padStart(2,'0');
+  let mm = now.getMinutes().toString().padStart(2,'0');
+  document.getElementById('clock-time').textContent = `${hh}:${mm}`;
+  document.getElementById('clock-date').textContent =
+    `${dayNames[now.getDay()]} ${ordinal(now.getDate())} ${monthNames[now.getMonth()]}`;
+  const isNight = now.getHours() >= 20 || now.getHours() < 7;
+  document.body.classList.toggle('night', isNight);
+}
+setInterval(renderClock, 1000 * 15);
+renderClock();
+
+/* ---------- SKY SCENE ---------- */
+function renderScene(weatherCode, isNight){
+  const scene = document.getElementById('scene');
+  const thunder = [95,96,99].includes(weatherCode);
+  const snow = [71,73,75,77,85,86].includes(weatherCode);
+  const fog = [45,48].includes(weatherCode);
+  const rainy = !snow && !thunder && [51,53,55,56,57,61,63,65,66,67,80,81,82].includes(weatherCode);
+  const cloudy = [1,2,3].includes(weatherCode) || fog || rainy || snow || thunder;
+  const sx = 830, sy = 460; // sun/moon anchor point
+  let svg = '';
+
+  if(!isNight){
+    // soft layered halo (concentric fading rings, no CSS blur needed)
+    svg += `<circle cx="${sx}" cy="${sy}" r="120" fill="var(--sun)" opacity="${cloudy?0.06:0.12}"/>`;
+    svg += `<circle cx="${sx}" cy="${sy}" r="95" fill="var(--sun)" opacity="${cloudy?0.08:0.16}"/>`;
+    // thin rays
+    if(!cloudy){
+      for(let i=0;i<12;i++){
+        const a = (i/12) * Math.PI * 2;
+        const r1 = 82, r2 = 108;
+        const x1 = sx + Math.cos(a)*r1, y1 = sy + Math.sin(a)*r1;
+        const x2 = sx + Math.cos(a)*r2, y2 = sy + Math.sin(a)*r2;
+        svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--sun)" stroke-width="3" opacity="0.35" class="sun-ray"/>`;
+      }
+    }
+    svg += `<circle cx="${sx}" cy="${sy}" r="70" fill="var(--sun)" opacity="${cloudy ? 0.55 : 0.95}" class="sun-pulse"/>`;
+  } else {
+    svg += `<circle cx="${sx}" cy="${sy}" r="58" fill="#eef3f6" opacity="0.12"/>`;
+    svg += `<circle cx="${sx-8}" cy="${sy-6}" r="46" fill="#eef3f6" opacity="0.9"/>`;
+    svg += `<circle cx="${sx+10}" cy="${sy-10}" r="40" fill="var(--sky-night-bot)" opacity="0.55"/>`; // crescent shading
+    for(let i=0;i<26;i++){
+      const x = 620 + (i*29)%360, y = 260 + (i*53)%320;
+      const r = i%6===0 ? 2.6 : 1.3;
+      const cls = i%6===0 ? 'star-twinkle-slow' : (i%3===0 ? 'star-twinkle' : '');
+      svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity="${0.3+(i%5)*0.12}" class="${cls}"/>`;
+    }
+  }
+
+  if(cloudy){
+    const cloudOp = thunder ? 0.8 : 0.6;
+    const cloudFill = thunder ? '#5a6b78' : '#ffffff';
+    const shadeFill = thunder ? '#3f4a54' : '#c9d6dc';
+    // each cloud = shading layer (offset) + highlight layer + puffs, grouped for parallax drift
+    const clouds = [
+      {cx:150, cy:150, s:1.0, speed:'drift-slow'},
+      {cx:300, cy:190, s:0.7, speed:'drift-med'},
+      {cx:700, cy:430, s:1.2, speed:'drift-slow'},
+      {cx:500, cy:470, s:0.8, speed:'drift-fast'}
+    ];
+    clouds.forEach(c=>{
+      const rx = 140*c.s, ry = 50*c.s;
+      svg += `<g class="${c.speed}">`;
+      svg += `<ellipse cx="${c.cx+8}" cy="${c.cy+10}" rx="${rx}" ry="${ry}" fill="${shadeFill}" opacity="${cloudOp*0.5}"/>`;
+      svg += `<ellipse cx="${c.cx}" cy="${c.cy}" rx="${rx}" ry="${ry}" fill="${cloudFill}" opacity="${cloudOp}"/>`;
+      svg += `<ellipse cx="${c.cx-rx*0.45}" cy="${c.cy+ry*0.25}" rx="${rx*0.5}" ry="${ry*0.7}" fill="${cloudFill}" opacity="${cloudOp}"/>`;
+      svg += `<ellipse cx="${c.cx+rx*0.5}" cy="${c.cy+ry*0.15}" rx="${rx*0.4}" ry="${ry*0.6}" fill="${cloudFill}" opacity="${cloudOp}"/>`;
+      svg += `<ellipse cx="${c.cx-rx*0.15}" cy="${c.cy-ry*0.35}" rx="${rx*0.4}" ry="${ry*0.5}" fill="${cloudFill}" opacity="${cloudOp*0.9}"/>`;
+      svg += `</g>`;
+    });
+  }
+
+  if(rainy){
+    for(let i=0;i<20;i++){
+      const x = (i*53)%1000, len = 30+(i%4)*8, delay=(i%5)*0.15;
+      svg += `<line x1="${x}" y1="480" x2="${x-12}" y2="${480+len}" stroke="var(--accent)" stroke-width="2" opacity="0.4" class="rain-drop" style="animation-delay:${delay}s"/>`;
+    }
+  }
+
+  if(snow){
+    for(let i=0;i<32;i++){
+      const x = (i*37)%1000, y = (i*59)%380 + 140, r = 2 + (i%3), delay=(i%6)*0.4;
+      svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity="0.8" class="snow-drift" style="animation-delay:${delay}s"/>`;
+    }
+  }
+
+  if(fog){
+    for(let i=0;i<4;i++){
+      const y = 250 + i*65;
+      svg += `<rect x="-50" y="${y}" width="1100" height="30" rx="15" fill="#dfe7ea" opacity="0.45" class="${i%2===0?'drift-slow':'drift-med'}"/>`;
+    }
+  }
+
+  if(thunder){
+    svg += `<polyline points="640,180 610,260 645,260 605,360" fill="none" stroke="var(--sun)" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" class="bolt-flash"/>`;
+  }
+
+  scene.innerHTML = svg;
+}
+
+
+/* ---------- COMPACT WEATHER ICON (for the 6-hour outlook row) ---------- */
+function weatherIconSVG(code, isNight, precipProb){
+  const thunder = [95,96,99].includes(code);
+  const snowCode = [71,73,75,77,85,86].includes(code);
+  const fog = [45,48].includes(code);
+  let rainy = !snowCode && !thunder && [51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code);
+  let cloudy = [1,2,3].includes(code) || fog || rainy || snowCode || thunder;
+  const snow = snowCode;
+  // let the actual rain-probability number override a mismatched weather_code,
+  // so the icon never contradicts the percentage shown next to it
+  if(typeof precipProb === 'number'){
+    if(precipProb >= 30){ rainy = true; cloudy = true; }
+    else if(precipProb >= 15){ cloudy = true; }
+  }
+  let s = '';
+  if(!isNight){
+    s += `<circle cx="12" cy="10" r="5" fill="var(--sun)" opacity="${cloudy?0.5:0.95}"/>`;
+  } else {
+    s += `<circle cx="12" cy="10" r="4.5" fill="#dfe7ee" stroke="var(--ink-faint)" stroke-width="0.7"/>`;
+  }
+  if(cloudy){
+    s += `<ellipse cx="11" cy="14.5" rx="8" ry="3.6" fill="#ffffff" stroke="var(--ink-faint)" stroke-width="0.6"/>`;
+    s += `<ellipse cx="7" cy="13.5" rx="4" ry="2.6" fill="#ffffff" stroke="var(--ink-faint)" stroke-width="0.6"/>`;
+  }
+  if(rainy){
+    s += `<line x1="8" y1="19" x2="6.5" y2="24" stroke="#1e6fd9" stroke-width="2" stroke-linecap="round"/>`;
+    s += `<line x1="12" y1="19" x2="10.5" y2="24" stroke="#1e6fd9" stroke-width="2" stroke-linecap="round"/>`;
+    s += `<line x1="16" y1="19" x2="14.5" y2="24" stroke="#1e6fd9" stroke-width="2" stroke-linecap="round"/>`;
+  }
+  if(snow){
+    s += `<circle cx="8" cy="21" r="1.3" fill="#6a7d88"/>`;
+    s += `<circle cx="12" cy="23" r="1.3" fill="#6a7d88"/>`;
+    s += `<circle cx="16" cy="21" r="1.3" fill="#6a7d88"/>`;
+  }
+  if(fog){
+    s += `<line x1="3" y1="19" x2="21" y2="19" stroke="#6a7d88" stroke-width="1.6" opacity="0.7"/>`;
+    s += `<line x1="5" y1="22" x2="19" y2="22" stroke="#6a7d88" stroke-width="1.6" opacity="0.7"/>`;
+  }
+  if(thunder){
+    s += `<polyline points="12,17 10,21 13,21 11,24" fill="none" stroke="#c98a2b" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  return `<svg viewBox="0 0 24 26">${s}</svg>`;
+}
+
+function renderOutlook(times, codes, startIdx, precipProbs, temps){
+  const row = document.getElementById('outlook-row');
+  if(!times || !codes){ row.innerHTML=''; return; }
+  let html = '';
+  for(let i=startIdx; i<Math.min(startIdx+6, times.length); i++){
+    const t = new Date(times[i]);
+    const hh = t.getHours();
+    const label = hh.toString().padStart(2,'0')+':00';
+    const isNight = hh >= 20 || hh < 7;
+    const pp = precipProbs ? precipProbs[i] : undefined;
+    const tempStr = (temps && typeof temps[i] === 'number') ? `${Math.round(temps[i])}&deg;` : '';
+    html += `<div class="outlook-item">${weatherIconSVG(codes[i], isNight, pp)}<span class="oi-temp">${tempStr}</span><span class="oi-hour">${label}</span></div>`;
+  }
+  row.innerHTML = html;
+}
+
+function beaufortForce(kt){
+  const thresholds = [1,4,7,11,17,22,28,34,41,48,56,64]; // upper bound (kt) for forces 0-11
+  for(let f=0; f<thresholds.length; f++){
+    if(kt < thresholds[f]) return f;
+  }
+  return 12;
+}
+
+/* ---------- DATA FETCH: OPEN-METEO ---------- */
+async function updateWeather(){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+      `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m` +
+      `&hourly=precipitation_probability,weather_code,temperature_2m` +
+      `&daily=temperature_2m_max&forecast_hours=6&timezone=Europe%2FLondon&wind_speed_unit=kn`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const temp = Math.round(data.current.temperature_2m * 10) / 10;
+    document.getElementById('temp-val').innerHTML = `${temp}<sup>&deg;C</sup>`;
+
+    const high = Math.round(data.daily.temperature_2m_max[0]);
+    document.getElementById('temp-high').innerHTML = `Max temp <b>${high}<sup>&deg;C</sup></b>`;
+
+    document.getElementById('humidity-val').textContent = `${Math.round(data.current.relative_humidity_2m)}%`;
+
+    const windSpeed = Math.round(data.current.wind_speed_10m);
+    const windDir = data.current.wind_direction_10m;
+    document.getElementById('wind-val').textContent = `${windSpeed} kt (F${beaufortForce(windSpeed)})`;
+    // wind_direction is where the wind blows FROM; rotate the arrow to point where it blows TO
+    const windScale = 0.7 + Math.min(windSpeed, 35) / 35 * 1.1; // ~0.7x at calm, ~1.8x at 35kt+
+    document.getElementById('wind-arrow').style.transform =
+      `rotate(${(windDir + 180) % 360}deg) scale(${windScale.toFixed(2)})`;
+
+    // rain probability for the current/next hour
+    const now = new Date();
+    const pad = n => n.toString().padStart(2,'0');
+    const nowLocal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}`;
+    let rainIdx = data.hourly.time.findIndex(t => t.startsWith(nowLocal));
+    if(rainIdx === -1) rainIdx = 0;
+    const rainProb = data.hourly.precipitation_probability[rainIdx];
+    document.getElementById('rain-val').textContent = `${rainProb ?? 0}%`;
+
+    const isNight = new Date().getHours() >= 20 || new Date().getHours() < 7;
+    renderScene(data.current.weather_code, isNight);
+    renderOutlook(data.hourly.time, data.hourly.weather_code, rainIdx, data.hourly.precipitation_probability, data.hourly.temperature_2m);
+  } catch(err){
+    console.error('Weather fetch failed', err);
+  }
+}
+
+/* ---------- DATA FETCH: TFL PICCADILLY LINE ---------- */
+/* ---------- ROUTE TRAFFIC (placeholder — to be wired to National Highways once set up) ---------- */
+async function updateTfl(){
+  // This box is reserved for a future "M27/M3/M25 disruption on the route to Enfield" alert,
+  // once a National Highways Developer Portal key is set up. For now it stays hidden.
+  const box = document.getElementById('tfl');
+  box.classList.remove('show');
+}
+
+/* ---------- BOOT ---------- */
+function refreshAll(){ updateWeather(); updateTfl(); }
+refreshAll();
+setInterval(refreshAll, REFRESH_MS);
+</script>
+</body>
+</html>
