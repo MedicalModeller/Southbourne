@@ -558,9 +558,7 @@ async function updateTfl(){
   const box = document.getElementById('tfl');
   const UKHO_API_KEY = '50f2b207e6914f4fbde71277b28e2af6'; // free Discovery tier — Bournemouth station 0037
   try{
-    const res = await fetch('https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6', {
-      headers: { 'Ocp-Apim-Subscription-Key': UKHO_API_KEY }
-    });
+    const res = await fetch('https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6&subscription-key=' + UKHO_API_KEY);
     if(!res.ok) throw new Error('Tide fetch failed: ' + res.status);
     const data = await res.json();
     const events = (Array.isArray(data) ? data : [])
