@@ -456,17 +456,17 @@ async function updateTfl(){
     const events = (Array.isArray(data) ? data : [])
       .map(e => {
         const raw = (e.DateTime || e.dateTime || '').toString();
-        // The UKHO API always returns times in GMT with no timezone marker on the string,
-        // so we must explicitly mark it as UTC — otherwise the browser silently guesses
-        // wrong (treating "GMT" numbers as if they were already local time).
-        const isoUtc = /[Zz]|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : raw + 'Z';
+        // The UKHO API always returns times in GMT with no reliable timezone marker,
+        // so strip anything that looks like an existing zone suffix and force UTC ourselves.
+        const stripped = raw.replace(/(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i, '');
+        const parsed = new Date(stripped + 'Z');
         return {
-          time: new Date(isoUtc),
+          time: parsed,
           type: (e.EventType || e.eventType || '').toString().toLowerCase(),
           height: e.Height ?? e.height
         };
       })
-      .filter(e => !isNaN(e.time) && typeof e.height === 'number')
+      .filter(e => e.time instanceof Date && !isNaN(e.time.getTime()) && typeof e.height === 'number')
       .sort((a,b) => a.time - b.time);
 
     const now = new Date();
