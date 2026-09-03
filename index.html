@@ -144,6 +144,20 @@
   body.night #tfl{ background:rgba(0,0,0,0.28); }
   #tfl.show{ opacity:1; visibility:visible; }
   .tide-title{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; margin-bottom:1.2vh; }
+
+  .tide-chart-panel{ margin-top:2vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:2vh 2.5vw; position:relative; z-index:2; display:none; }
+  body.night .tide-chart-panel{ background:rgba(0,0,0,0.28); }
+  .tide-chart-panel.show{ display:block; }
+  #tide-svg{ width:100%; height:16vh; display:block; }
+  .tide-curve{ fill:none; stroke:var(--accent); stroke-width:2.5; }
+  body.night .tide-curve{ stroke:#6fb4e6; }
+  .tide-fill{ fill:var(--accent); opacity:0.12; }
+  .tide-now-dot{ fill:var(--accent); }
+  body.night .tide-now-dot{ fill:#6fb4e6; }
+  .tide-now-line{ stroke:var(--ink-faint); stroke-width:1; stroke-dasharray:3,3; }
+  .tide-label{ font-family:'JetBrains Mono', monospace; font-size:13px; fill:var(--ink-faint); }
+  .grid-line{ stroke:var(--line); stroke-width:1; }
+  body.night .grid-line{ stroke:rgba(255,255,255,0.14); }
   #tide-row{ display:flex; gap:2.5vw; }
   .tide-col{ display:flex; flex-direction:column; align-items:center; gap:0.4vh; }
   .tide-col .tc-type{ font-size:2vh; color:var(--ink-soft); font-weight:500; white-space:nowrap; }
@@ -201,6 +215,11 @@
         <div class="tide-title">Tide times &middot; Today</div>
         <div id="tide-row"></div>
       </div>
+    </div>
+
+    <div class="tide-chart-panel" id="tide-chart-panel">
+      <div class="tide-title">Tide height</div>
+      <svg id="tide-svg" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
     </div>
 
     <div class="footer">154 Southbourne Overcliff Drive &middot; updates every 10 min</div>
@@ -449,6 +468,73 @@ async function updateWeather(){
 }
 
 /* ---------- TIDE STATUS (UKHO Tidal API, via CORS relay) ---------- */
+/* ---------- TIDE HEIGHT CHART ---------- */
+function interpolateTideHeight(events, t){
+  // cosine interpolation between the two bracketing high/low events — gives the
+  // characteristic S-shaped tidal curve while passing exactly through each real point
+  let before = null, after = null;
+  for(let i=0;i<events.length-1;i++){
+    if(events[i].time <= t && events[i+1].time >= t){ before = events[i]; after = events[i+1]; break; }
+  }
+  if(!before || !after) return null;
+  const frac = (t - before.time) / (after.time - before.time);
+  return before.height + (after.height - before.height) * (1 - Math.cos(Math.PI * frac)) / 2;
+}
+
+function renderTideChart(events, londonHHMMFn){
+  const panel = document.getElementById('tide-chart-panel');
+  const svg = document.getElementById('tide-svg');
+  if(!events || events.length < 2){ panel.classList.remove('show'); return; }
+
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - 6*3600*1000);
+  const windowEnd = new Date(now.getTime() + 18*3600*1000);
+  const usable = events.filter(e => e.time >= new Date(windowStart.getTime()-6*3600*1000) && e.time <= new Date(windowEnd.getTime()+6*3600*1000));
+  if(usable.length < 2){ panel.classList.remove('show'); return; }
+
+  const heights = usable.map(e => e.height).filter(h => typeof h === 'number');
+  if(heights.length < 2){ panel.classList.remove('show'); return; }
+  const lo = Math.max(0, Math.min(...heights) - 0.3), hi = Math.max(...heights) + 0.3;
+
+  const w = 600, h = 100, labelY = 122, axisW = 28;
+  const xFor = t => axisW + ((t - windowStart) / (windowEnd - windowStart)) * (w - axisW);
+  const yFor = v => h - ((v - lo)/(hi - lo)) * h;
+
+  const pts = [];
+  for(let m = 0; m <= 24*60; m += 15){
+    const t = new Date(windowStart.getTime() + m*60000);
+    const v = interpolateTideHeight(usable, t);
+    if(v !== null) pts.push([xFor(t), yFor(v)]);
+  }
+  if(pts.length < 2){ panel.classList.remove('show'); return; }
+
+  let svgContent = '';
+  const topMetre = Math.ceil(hi);
+  for(let m = 0; m <= topMetre; m++){
+    const y = yFor(m);
+    if(y < -2 || y > h+2) continue;
+    svgContent += `<line x1="${axisW}" y1="${y}" x2="${w}" y2="${y}" class="grid-line"/>`;
+    svgContent += `<text x="${axisW-6}" y="${y+4}" font-size="12" font-family="'JetBrains Mono', monospace" class="tide-label" text-anchor="end">${m}</text>`;
+  }
+  for(let m = -6*60; m <= 18*60; m += 180){
+    const t = new Date(now.getTime() + m*60000);
+    const x = xFor(t);
+    svgContent += `<text x="${x}" y="${labelY}" font-size="12" font-family="'JetBrains Mono', monospace" class="tide-label" text-anchor="middle">${londonHHMMFn(t)}</text>`;
+  }
+  const areaPts = pts.map(p => p.join(',')).join(' ');
+  svgContent += `<polygon class="tide-fill" points="${axisW},${h} ${areaPts} ${w},${h}"/>`;
+  svgContent += `<polyline class="tide-curve" points="${areaPts}"/>`;
+  const nowV = interpolateTideHeight(usable, now);
+  if(nowV !== null){
+    const nowX = xFor(now), nowY = yFor(nowV);
+    svgContent += `<line x1="${nowX}" y1="0" x2="${nowX}" y2="${h}" class="tide-now-line"/>`;
+    svgContent += `<circle cx="${nowX}" cy="${nowY}" r="5" class="tide-now-dot"/>`;
+  }
+
+  svg.innerHTML = svgContent;
+  panel.classList.add('show');
+}
+
 async function updateTfl(){
   const box = document.getElementById('tfl');
   try{
@@ -496,9 +582,12 @@ async function updateTfl(){
     } else {
       box.classList.remove('show');
     }
+
+    renderTideChart(events, londonHHMM);
   } catch(err){
     console.error('Tide fetch failed', err);
     box.classList.remove('show');
+    document.getElementById('tide-chart-panel').classList.remove('show');
   }
 }
 
