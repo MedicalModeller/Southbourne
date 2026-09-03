@@ -489,10 +489,8 @@ function renderTideChart(events, londonHHMMFn){
   const now = new Date();
   const windowStart = new Date(now.getTime() - 6*3600*1000);
   const windowEnd = new Date(now.getTime() + 18*3600*1000);
-  const usable = events.filter(e => e.time >= new Date(windowStart.getTime()-6*3600*1000) && e.time <= new Date(windowEnd.getTime()+6*3600*1000));
-  if(usable.length < 2){ panel.classList.remove('show'); return; }
 
-  const heights = usable.map(e => e.height).filter(h => typeof h === 'number');
+  const heights = events.map(e => e.height).filter(h => typeof h === 'number');
   if(heights.length < 2){ panel.classList.remove('show'); return; }
   const lo = Math.max(0, Math.min(...heights) - 0.3), hi = Math.max(...heights) + 0.3;
 
@@ -503,7 +501,7 @@ function renderTideChart(events, londonHHMMFn){
   const pts = [];
   for(let m = 0; m <= 24*60; m += 15){
     const t = new Date(windowStart.getTime() + m*60000);
-    const v = interpolateTideHeight(usable, t);
+    const v = interpolateTideHeight(events, t);
     if(v !== null) pts.push([xFor(t), yFor(v)]);
   }
   if(pts.length < 2){ panel.classList.remove('show'); return; }
@@ -524,7 +522,7 @@ function renderTideChart(events, londonHHMMFn){
   const areaPts = pts.map(p => p.join(',')).join(' ');
   svgContent += `<polygon class="tide-fill" points="${axisW},${h} ${areaPts} ${w},${h}"/>`;
   svgContent += `<polyline class="tide-curve" points="${areaPts}"/>`;
-  const nowV = interpolateTideHeight(usable, now);
+  const nowV = interpolateTideHeight(events, now);
   if(nowV !== null){
     const nowX = xFor(now), nowY = yFor(nowV);
     svgContent += `<line x1="${nowX}" y1="0" x2="${nowX}" y2="${h}" class="tide-now-line"/>`;
