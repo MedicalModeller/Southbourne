@@ -198,7 +198,7 @@
       </div>
 
       <div id="tfl">
-        <div class="tide-title">Tide times &middot; Today (GMT, not BST-adjusted)</div>
+        <div class="tide-title">Tide times &middot; Today</div>
         <div id="tide-row"></div>
       </div>
     </div>
@@ -451,19 +451,23 @@ async function updateWeather(){
 /* ---------- TIDE STATUS (UKHO Tidal API, via CORS relay) ---------- */
 async function updateTfl(){
   const box = document.getElementById('tfl');
-  const UKHO_API_KEY = '50f2b207e6914f4fbde71277b28e2af6'; // free Discovery tier — Bournemouth station 0037
   try{
-    const target = 'https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/0037/TidalEvents?duration=6&subscription-key=' + UKHO_API_KEY;
-    const res = await fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(target));
+    const res = await fetch('https://muddy-poetry-986b.boyd-goldie.workers.dev/');
     if(!res.ok) throw new Error('Tide fetch failed: ' + res.status);
     const data = await res.json();
     const events = (Array.isArray(data) ? data : [])
-      .map(e => ({
-        time: new Date(e.DateTime || e.dateTime),
-        type: (e.EventType || e.eventType || '').toString().toLowerCase(),
-        height: e.Height ?? e.height
-      }))
-      .filter(e => !isNaN(e.time) && typeof e.height === 'number')
+      .map(e => {
+        const raw = (e.DateTime || e.dateTime || '').toString();
+        // The UKHO API always returns times in GMT with no reliable timezone marker,
+        // so strip anything that looks like an existing zone suffix and force UTC ourselves.
+        const stripped = raw.replace(/(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i, '');
+        return {
+          time: new Date(stripped + 'Z'),
+          type: (e.EventType || e.eventType || '').toString().toLowerCase(),
+          height: e.Height ?? e.height
+        };
+      })
+      .filter(e => e.time instanceof Date && !isNaN(e.time.getTime()) && typeof e.height === 'number')
       .sort((a,b) => a.time - b.time);
 
     const now = new Date();
@@ -471,16 +475,20 @@ async function updateTfl(){
     const todayEnd = new Date(todayStart.getTime() + 24*3600*1000);
     const todaysEvents = events.filter(e => e.time >= todayStart && e.time < todayEnd);
 
+    const londonTimeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false });
+    function londonHHMM(d){
+      const parts = londonTimeFmt.formatToParts(d).reduce((acc,p) => (acc[p.type]=p.value, acc), {});
+      return `${parts.hour}:${parts.minute}`;
+    }
+
     const row = document.getElementById('tide-row');
     if(todaysEvents.length > 0){
       row.innerHTML = todaysEvents.map(e => {
         const isHigh = e.type.includes('high');
-        const hh = e.time.getHours().toString().padStart(2,'0');
-        const mm = e.time.getMinutes().toString().padStart(2,'0');
         const heightStr = typeof e.height === 'number' ? `${e.height.toFixed(1)}m` : '';
         return `<div class="tide-col">
           <span class="tc-type">${isHigh ? 'High Water' : 'Low Water'}</span>
-          <span class="tc-time">${hh}:${mm}</span>
+          <span class="tc-time">${londonHHMM(e.time)}</span>
           <span class="tc-height">${heightStr}</span>
         </div>`;
       }).join('');
