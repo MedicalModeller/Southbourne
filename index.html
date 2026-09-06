@@ -148,6 +148,12 @@
   .tide-chart-panel{ margin-top:2vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:2vh 2.5vw; position:relative; z-index:2; display:none; }
   body.night .tide-chart-panel{ background:rgba(0,0,0,0.28); }
   .tide-chart-panel.show{ display:block; }
+
+  .sea-temp-panel{ margin-top:2vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:1.8vh 2.5vw; position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
+  body.night .sea-temp-panel{ background:rgba(0,0,0,0.28); }
+  .sea-temp-panel .st-label{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; }
+  .sea-temp-panel .st-value{ font-family:'Outfit', sans-serif; font-size:3.2vh; font-weight:600; color:var(--ink); }
+  body.night .sea-temp-panel .st-value{ color:#eef3f6; }
   #tide-svg{ width:100%; height:16vh; display:block; }
   .tide-curve{ fill:none; stroke:var(--accent); stroke-width:2.5; }
   body.night .tide-curve{ stroke:#6fb4e6; }
@@ -220,6 +226,11 @@
     <div class="tide-chart-panel" id="tide-chart-panel">
       <div class="tide-title">Tide height</div>
       <svg id="tide-svg" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="sea-temp-panel">
+      <span class="st-label">Sea Temperature &middot; Bournemouth</span>
+      <span class="st-value" id="sea-temp-val">--&deg;C</span>
     </div>
 
     <div class="footer">154 Southbourne Overcliff Drive &middot; updates every 10 min</div>
@@ -590,7 +601,23 @@ async function updateTfl(){
 }
 
 /* ---------- BOOT ---------- */
-function refreshAll(){ updateWeather(); updateTfl(); }
+/* ---------- SEA TEMPERATURE (Open-Meteo Marine Weather API, free, no key) ---------- */
+async function updateSeaTemp(){
+  try{
+    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT}&longitude=${LON}&current=sea_surface_temperature`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Sea temp fetch failed: ' + res.status);
+    const data = await res.json();
+    const temp = data.current?.sea_surface_temperature;
+    if(typeof temp === 'number'){
+      document.getElementById('sea-temp-val').textContent = `${temp.toFixed(1)}\u00b0C`;
+    }
+  } catch(err){
+    console.error('Sea temp fetch failed', err);
+  }
+}
+
+function refreshAll(){ updateWeather(); updateTfl(); updateSeaTemp(); }
 refreshAll();
 setInterval(refreshAll, REFRESH_MS);
 </script>
