@@ -145,7 +145,7 @@
   #tfl.show{ opacity:1; visibility:visible; }
   .tide-title{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; margin-bottom:1.2vh; }
 
-  .sea-temp-panel{ margin-top:2vh; margin-left:auto; width:fit-content; background:rgba(255,255,255,0.55); border-radius:10px; padding:1.8vh 2.5vw; position:relative; z-index:2; display:flex; align-items:center; gap:1.5vw; }
+  .sea-temp-panel{ margin-top:2vh; background:rgba(255,255,255,0.55); border-radius:10px; padding:1.8vh 2.5vw; position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
   body.night .sea-temp-panel{ background:rgba(0,0,0,0.28); }
   .sea-temp-panel .st-label{ font-family:'JetBrains Mono', monospace; font-size:2.1vh; text-transform:uppercase; letter-spacing:2px; color:var(--ink-soft); font-weight:500; }
   .sea-temp-panel .st-value{ font-family:'Outfit', sans-serif; font-size:3.2vh; font-weight:600; color:var(--ink); }
@@ -203,15 +203,17 @@
         </div>
       </div>
 
-      <div id="tfl">
-        <div class="tide-title">Tide Times &middot; Bournemouth</div>
-        <div id="tide-row"></div>
-      </div>
-    </div>
+      <div style="display:flex; flex-direction:column;">
+        <div id="tfl">
+          <div class="tide-title">Tide Times &middot; Bournemouth</div>
+          <div id="tide-row"></div>
+        </div>
 
-    <div class="sea-temp-panel">
-      <span class="st-label">Sea Temperature &middot; Bournemouth</span>
-      <span class="st-value" id="sea-temp-val">--&deg;C</span>
+        <div class="sea-temp-panel">
+          <span class="st-label">Sea Temperature &middot; Bournemouth</span>
+          <span class="st-value" id="sea-temp-val">--&deg;C</span>
+        </div>
+      </div>
     </div>
 
     <div class="footer">154 Southbourne Overcliff Drive &middot; updates every 10 min</div>
