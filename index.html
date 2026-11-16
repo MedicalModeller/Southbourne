@@ -465,7 +465,7 @@ async function updateWeather(){
 async function updateTfl(){
   const box = document.getElementById('tfl');
   try{
-    const res = await fetch('https://muddy-poetry-986b.boyd-goldie.workers.dev/');
+    const res = await fetch('https://muddy-poetry-986b.tudordesigns.workers.dev/');
     if(!res.ok) throw new Error('Tide fetch failed: ' + res.status);
     const data = await res.json();
     const events = (Array.isArray(data) ? data : [])
